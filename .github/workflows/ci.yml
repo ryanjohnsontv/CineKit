@@ -7,10 +7,10 @@ on:
 jobs:
   build-and-test:
     name: Build & Test
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Cache SwiftPM build state
         uses: actions/cache@v4
