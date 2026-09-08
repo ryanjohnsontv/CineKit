@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache SwiftPM build state
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: >-
+            swiftpm-${{ runner.os }}-${{
+              hashFiles('Package.swift', 'Sources/**', 'Tests/**')
+            }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-
+
+      - name: swift test
+        run: swift test

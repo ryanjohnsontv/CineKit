@@ -1,0 +1,6 @@
+*.cine
+
+.build/
+.swiftpm/
+
+.DS_Store
