@@ -56,6 +56,27 @@ public final class CineFile: Sendable {
     /// file before display.
     public var needsVerticalFlip: Bool { unpacker.needsVerticalFlip }
 
+    /// `setup.effectiveBlackWhiteLevels`, re-expressed in whatever domain
+    /// `decodeFrame(at:)`'s own pixel output is actually in — the version
+    /// to use for tone-mapping real decoded pixels, as opposed to `setup`'s
+    /// own property, which is only ever "what SETUP itself literally
+    /// records." For a P10-packed file those two domains differ (see
+    /// `P10Unpacker`'s own doc comment): `SETUP.BlackLevel`/`WhiteLevel` are
+    /// recorded in the pre-linearization *packed* domain, so this passes
+    /// them through the exact same `P10Linearization` table `P10Unpacker`
+    /// itself applies to pixel data, landing both back in the same domain.
+    /// Every other compression's pixel data was never companded in the
+    /// first place, so `setup`'s own recorded levels are already correct
+    /// and are returned unchanged.
+    public var effectiveBlackWhiteLevels: (black: Int32, white: Int32) {
+        let raw = setup.effectiveBlackWhiteLevels
+        guard bitmapInfo.compression == .p10Packed else { return raw }
+        func linearized(_ level: Int32) -> Int32 {
+            Int32(P10Linearization.linearize(UInt16(clamping: max(0, level))))
+        }
+        return (linearized(raw.black), linearized(raw.white))
+    }
+
     /// The absolute on-disk byte offset of frame `index`'s block — the same
     /// value `decodeFrame(at:)` reads from internally, exposed so a caller
     /// that needs to bias disk-level readahead toward a specific frame (see

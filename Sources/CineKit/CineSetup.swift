@@ -110,6 +110,18 @@ public struct CineSetup: Sendable {
         return reader.int32(SetupFieldLayout.bEnableColorOffset) != 0
     }
 
+    /// `SETUP.CameraVersion` — per Vision Research's own Phantom Cine File
+    /// Format specification (see `README.md`'s "Specification" section for
+    /// the public link), "the version of camera hardware," a model/
+    /// hardware-revision code (its own examples: Firewire cameras 4/5/6,
+    /// Ethernet cameras 42/43/51/7/72/73/9/91/10, "650 (p65) 660 (hd)")
+    /// **shared by every physical unit of that hardware revision** — not a
+    /// per-unit identifier the way `serial` is, and not a firmware/software
+    /// version either (`FirmwareVersion`/`SoftwareVersion` are separate,
+    /// adjacent fields in the same struct). Useful as a stable key for
+    /// hardware-revision-specific behavior (e.g. a per-camera-model color
+    /// calibration fallback) that should generalize across every unit of a
+    /// model rather than one specific physical camera.
     public var cameraVersion: UInt32? {
         guard present(SetupFieldLayout.cameraVersionOffset, SetupFieldLayout.cameraVersionSize) else { return nil }
         return reader.uint32(SetupFieldLayout.cameraVersionOffset)
@@ -171,6 +183,18 @@ public struct CineSetup: Sendable {
     /// Best-effort black/white points, falling back to a sane default
     /// derived from `realBPP` (or a flat 10-bit assumption) when the
     /// explicit fields aren't present in this file.
+    ///
+    /// **For a P10-packed file, these are NOT the right values to
+    /// tone-map an actually-decoded frame's pixels against** — Vision
+    /// Research's own spec records `BlackLevel`/`WhiteLevel` in the
+    /// pre-linearization *packed* domain (64/1015 on every real P10 sample
+    /// seen so far), while `CineFile.decodeFrame(at:)`'s pixel output is
+    /// already linearized (see `P10Unpacker`'s own doc comment) — so this
+    /// property's raw numbers describe a domain that P10 pixel data no
+    /// longer is in. Use `CineFile.effectiveBlackWhiteLevels` instead for
+    /// any actual pixel-domain black/white stretch; this property remains
+    /// correct as-is for every other compression, and as "what SETUP
+    /// itself literally records" in all cases.
     public var effectiveBlackWhiteLevels: (black: Int32, white: Int32) {
         let bpp = realBPP ?? 10
         let defaultWhite = Int32((1 << bpp) - 1)
