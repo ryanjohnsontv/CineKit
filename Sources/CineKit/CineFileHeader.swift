@@ -2,11 +2,9 @@ import Foundation
 
 /// The 44-byte `CINEFILEHEADER` at the start of every `.cine` file.
 ///
-/// `Sendable`: a plain immutable value type over primitive numeric fields —
-/// Swift's automatic Sendable inference for structs doesn't extend to
-/// `public` types (their conformances are part of the API surface, so the
-/// language requires opting in explicitly rather than inferring it), so this
-/// is declared explicitly for `CineFile` (which stores one) to be Sendable.
+/// `Sendable`: explicit because Swift's automatic Sendable inference for
+/// structs doesn't extend to `public` types — needed since `CineFile`
+/// stores one.
 public struct CineFileHeader: Sendable {
     public static let byteSize = 44
     /// ASCII "CI", read (or written) as a little-endian UInt16. Not

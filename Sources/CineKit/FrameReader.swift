@@ -15,11 +15,11 @@ struct RawFrame {
 /// u8[ImageSize]           // raw pixel data
 /// ```
 ///
-/// `AnnotationSize` covers the field itself, the annotation payload, AND the
-/// trailing `ImageSize` field — i.e. the pixel data starts exactly
-/// `AnnotationSize` bytes after the frame's base offset. This is easy to get
-/// wrong (an earlier attempt assumed `ImageSize` immediately followed
-/// `AnnotationSize`, which only happens to work when `AnnotationSize == 8`).
+/// `AnnotationSize` covers the field itself, the annotation payload, AND
+/// the trailing `ImageSize` field — the pixel data starts exactly
+/// `AnnotationSize` bytes after the frame's base offset. Easy to get
+/// wrong: an earlier version assumed `ImageSize` immediately followed
+/// `AnnotationSize`, which only happens to work when `AnnotationSize == 8`.
 struct FrameReader {
     let store: FileBackingStore
 

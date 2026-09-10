@@ -3,15 +3,11 @@ import Foundation
 /// Top-level entry point: opens a `.cine` file and exposes its parsed
 /// headers plus per-frame decoding.
 ///
-/// `Sendable`: this is a checked (not `@unchecked`) conformance — `CineFile`
-/// is `final`, and every stored property is `let`-bound to a type that is
-/// itself Sendable (`CineFileHeader`/`BitmapInfoHeader`/`CineSetup`/
-/// `FrameOffsetTable`/`FrameReader` are plain immutable structs; `store` and
-/// `unpacker` are existentials over `FileBackingStore`/`PixelUnpacker`,
-/// both of which now require `Sendable` of their conformers). Nothing here
-/// is mutated after `init` returns, so sharing one `CineFile` across actors
-/// (e.g. handing it into an actor-isolated frame cache) is genuinely safe,
-/// and the compiler can verify that itself.
+/// `Sendable`: a checked (not `@unchecked`) conformance — `CineFile` is
+/// `final` with every stored property `let`-bound to a Sendable type
+/// (immutable structs, or existentials over `Sendable`-constrained
+/// protocols). Nothing is mutated after `init`, so sharing one `CineFile`
+/// across actors is safe and compiler-verified.
 public final class CineFile: Sendable {
     public let header: CineFileHeader
     public let bitmapInfo: BitmapInfoHeader
@@ -27,10 +23,9 @@ public final class CineFile: Sendable {
         try self.init(store: MappedFileBackingStore(url: url))
     }
 
-    /// The general entry point behind `init(url:)` above — takes any
-    /// `FileBackingStore` conformer, not just the memory-mapped default, so
-    /// a consumer can plug in their own (e.g. a buffered/chunked store for
-    /// files on a network volume; see `FileBackingStore`'s own doc comment).
+    /// The general entry point behind `init(url:)` — takes any
+    /// `FileBackingStore` conformer so callers can plug in their own (e.g.
+    /// a buffered/chunked store for files on a network volume).
     public init(store: FileBackingStore) throws {
         let headerData = try store.read(at: 0, count: CineFileHeader.byteSize)
         let header = try CineFileHeader(data: headerData)
@@ -56,11 +51,27 @@ public final class CineFile: Sendable {
     /// file before display.
     public var needsVerticalFlip: Bool { unpacker.needsVerticalFlip }
 
-    /// The absolute on-disk byte offset of frame `index`'s block — the same
-    /// value `decodeFrame(at:)` reads from internally, exposed so a caller
-    /// that needs to bias disk-level readahead toward a specific frame (see
-    /// `primeFileCache(at:startOffset:)`) doesn't need its own copy of
-    /// `FrameOffsetTable`, which is otherwise private to this type.
+    /// `setup.effectiveBlackWhiteLevels`, re-expressed in the domain
+    /// `decodeFrame(at:)`'s pixel output is actually in — use this (not
+    /// `setup`'s own property) for tone-mapping decoded pixels. For a
+    /// P10-packed file, `SETUP.BlackLevel`/`WhiteLevel` are recorded in the
+    /// pre-linearization *packed* domain, so they're run through the same
+    /// `P10Linearization` table `P10Unpacker` applies to pixel data. Every
+    /// other compression is uncompanded, so `setup`'s levels are already
+    /// correct and returned unchanged.
+    public var effectiveBlackWhiteLevels: (black: Int32, white: Int32) {
+        let raw = setup.effectiveBlackWhiteLevels
+        guard bitmapInfo.compression == .p10Packed else { return raw }
+        func linearized(_ level: Int32) -> Int32 {
+            Int32(P10Linearization.linearize(UInt16(clamping: max(0, level))))
+        }
+        return (linearized(raw.black), linearized(raw.white))
+    }
+
+    /// The absolute on-disk byte offset of frame `index`'s block — exposed
+    /// so a caller (e.g. `primeFileCache(at:startOffset:)`) can bias disk
+    /// readahead toward a specific frame without its own copy of the
+    /// otherwise-private `FrameOffsetTable`.
     public func byteOffset(ofFrame index: Int) throws -> Int {
         guard index >= 0 && index < frameCount else {
             throw CineError.frameIndexOutOfRange(index: index, count: frameCount)
@@ -87,11 +98,9 @@ public final class CineFile: Sendable {
 
     // MARK: - Raw-bytes access for CineFileWriter
     //
-    // These are `internal` (no access modifier), not `public`: they exist
-    // solely so `CineFileWriter` (same module, different file, so it can't
-    // see `store`/`offsetTable` below since those are `private`) can copy
-    // bytes verbatim during a trim, without exposing "give me raw file
-    // bytes" as part of CineKit's public API surface.
+    // Internal, not `public`: lets `CineFileWriter` (same module, separate
+    // file) copy bytes verbatim during a trim without exposing raw file
+    // access as public API.
 
     /// The exact on-disk `BITMAPINFOHEADER` bytes (`BitmapInfoHeader.byteSize`
     /// bytes, starting at `header.offImageHeader`), unparsed.
@@ -99,11 +108,10 @@ public final class CineFile: Sendable {
         try store.read(at: header.offImageHeader, count: BitmapInfoHeader.byteSize)
     }
 
-    /// The exact on-disk `SETUP` bytes (`setup.length` bytes, starting at
-    /// `header.offSetup`), unparsed. Deliberately reads only `setup.length`
-    /// bytes, not the possibly-larger buffer `CineSetup` read internally for
-    /// its own field parsing (see `CineSetup`'s doc comment) — this must be
-    /// exactly the real on-disk SETUP block, no more.
+    /// The exact on-disk `SETUP` bytes (`setup.length` bytes at
+    /// `header.offSetup`), unparsed. Reads only `setup.length` bytes, not
+    /// the possibly-larger buffer `CineSetup` reads internally for its own
+    /// field parsing — this must be exactly the real on-disk SETUP block.
     func rawSetupBytes() throws -> Data {
         try store.read(at: header.offSetup, count: setup.length)
     }

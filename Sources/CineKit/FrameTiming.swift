@@ -24,15 +24,12 @@ public struct CineTimestamp: Sendable, Equatable {
 
 extension CineFile {
     /// Per-frame capture timestamps, parsed from the file's tagged-block
-    /// region (the `Type == 1002` TIME64 array — see `TaggedBlock`'s doc
-    /// comment for the confirmed on-disk shape and the real-sample evidence
-    /// behind it). `nil` if this file has no such block, or if its payload
-    /// doesn't divide evenly into exactly `frameCount` 8-byte records (the
-    /// same "don't guess at a shape we don't recognize" standard
-    /// `TaggedBlockRegion` itself already applies).
+    /// region (the `Type == 1002` TIME64 array — see `TaggedBlock` for the
+    /// confirmed on-disk shape). `nil` if this file has no such block, or
+    /// its payload doesn't divide evenly into exactly `frameCount` 8-byte
+    /// records.
     ///
-    /// When non-`nil`, frame-index-aligned with `decodeFrame(at:)` — same
-    /// 0-based indexing, one entry per frame.
+    /// When non-`nil`, frame-index-aligned with `decodeFrame(at:)`.
     public func frameCaptureTimes() throws -> [CineTimestamp]? {
         try perFrameTaggedRecords(type: 1002, recordSize: 8) { record in
             let reader = DataReader(data: record)
@@ -43,9 +40,7 @@ extension CineFile {
     }
 
     /// Per-frame exposure duration, in nanoseconds — the `Type == 1003`
-    /// array (see `TaggedBlock`'s doc comment). `nil` under the same
-    /// conditions as `frameCaptureTimes()` above.
-    ///
+    /// array. `nil` under the same conditions as `frameCaptureTimes()`.
     /// When non-`nil`, frame-index-aligned with `decodeFrame(at:)`.
     public func frameExposureNanoseconds() throws -> [UInt32]? {
         try perFrameTaggedRecords(type: 1003, recordSize: 4) { record in
@@ -53,13 +48,11 @@ extension CineFile {
         }
     }
 
-    /// Shared lookup behind `frameCaptureTimes()`/`frameExposureNanoseconds()`
-    /// above: finds the first tagged block of `type` in this file's tagged-
-    /// block region, confirms its payload is exactly `frameCount` records of
-    /// `recordSize` bytes each, and decodes every record with `decode`.
-    /// Returns `nil` (never throws for "not found"/"wrong shape") whenever
-    /// this file simply doesn't have that data — only a real I/O failure
-    /// reading the region itself throws.
+    /// Shared lookup behind `frameCaptureTimes()`/`frameExposureNanoseconds()`:
+    /// finds the first tagged block of `type`, confirms its payload is
+    /// exactly `frameCount` records of `recordSize` bytes each, and decodes
+    /// every record with `decode`. Returns `nil` for "not found"/"wrong
+    /// shape" — only a real I/O failure reading the region throws.
     private func perFrameTaggedRecords<T>(
         type: UInt16,
         recordSize: Int,

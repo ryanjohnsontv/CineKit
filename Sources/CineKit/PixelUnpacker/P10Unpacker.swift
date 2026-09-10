@@ -1,11 +1,25 @@
 import Foundation
 
 /// `biCompression == 256`: Vision Research's "P10" 10-bit packed format —
-/// every 5 bytes encode 4 pixels. Bit layout and vertical-flip behavior were
-/// confirmed by visually validating decoded frames against real sample
-/// files (a point-source-light target produced a correct radially-symmetric
-/// bloom; a natural scene rendered right-side-up with readable text only
-/// when NOT flipped).
+/// every 5 bytes encode 4 pixels. Bit layout and vertical-flip behavior
+/// confirmed by visually validating decoded frames against real samples (a
+/// point-source light target produced a correct radially-symmetric bloom;
+/// a natural scene read right-side-up only when NOT flipped).
+///
+/// P10 isn't a plain bit-truncation of the sensor's native 12-bit linear
+/// reading — the spec documents a "compander-expander scheme": a
+/// Rec.709-style gamma (2.2) curve compresses 12-bit linear into 10 bits
+/// before storage (less shadow precision loss than plain truncation), and
+/// "the inverse function should be applied at the linearization" via the
+/// exact lookup table `P10Linearization` provides (spec Appendix 1). Every
+/// value below is run through that table immediately after unpacking, so
+/// output here is always genuinely linear-referred (`P12LUnpacker`/
+/// `UncompressedUnpacker` need no such step; neither format compands).
+/// Skipping it — as an earlier version did — leaves every downstream
+/// linear operation (white balance, demosaic, color matrix) silently
+/// running on gamma-encoded data; see `CineFile.effectiveBlackWhiteLevels`
+/// for the other half of that fix (recorded `SETUP.BlackLevel`/
+/// `WhiteLevel` need the same table to land in this domain).
 struct P10Unpacker: PixelUnpacker {
     var needsVerticalFlip: Bool { false }
 
