@@ -35,10 +35,10 @@ struct P10Unpacker: PixelUnpacker {
             let b3 = UInt16(raw.loadUnaligned(fromByteOffset: byteOffset + 3, as: UInt8.self))
             let b4 = UInt16(raw.loadUnaligned(fromByteOffset: byteOffset + 4, as: UInt8.self))
 
-            destination[pixelIndex]     = (b0 << 2) | (b1 >> 6)
-            destination[pixelIndex + 1] = ((b1 & 0x3F) << 4) | (b2 >> 4)
-            destination[pixelIndex + 2] = ((b2 & 0x0F) << 6) | (b3 >> 2)
-            destination[pixelIndex + 3] = ((b3 & 0x03) << 8) | b4
+            destination[pixelIndex]     = P10Linearization.linearize((b0 << 2) | (b1 >> 6))
+            destination[pixelIndex + 1] = P10Linearization.linearize(((b1 & 0x3F) << 4) | (b2 >> 4))
+            destination[pixelIndex + 2] = P10Linearization.linearize(((b2 & 0x0F) << 6) | (b3 >> 2))
+            destination[pixelIndex + 3] = P10Linearization.linearize(((b3 & 0x03) << 8) | b4)
 
             pixelIndex += 4
             byteOffset += 5

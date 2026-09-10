@@ -28,6 +28,10 @@ one).
   - `FrameHistogram`/`FrameHistogramComputer`: a per-channel value histogram computed from the *rendered* (post-debayer/grading/LUT) image, matching what a raw-editing tool's histogram shows.
   - Building a Metal shader inside an SPM package needs a build-tool plugin (plain `swift build` doesn't auto-compile `.metal` files the way Xcode does) — see `Plugins/MetalShaderPlugin`. An Xcode app target consuming this rendering pipeline needs its own copy of `Tonemap.metal` compiled directly into its own bundle (`Bundle.main` has no SwiftPM `Bundle.module` of its own) — see `CineRenderer.init(device:bundle:)`'s doc comment for the exact mechanism, already proven out in CinePlayer's and CineControl's own Xcode projects.
 
+## Specification
+
+Vision Research's own "Phantom Cine File Format" specification — publicly downloadable, no NDA or account required: <https://phantomhighspeed.my.site.com/PhantomCommunity/servlet/fileField?entityId=ka01N000000vtRkQAI&field=File_Attachments__Body__s>. Every place this package relies on it (the `SETUP` struct layout, the `CameraVersion`/`BlackLevel`/`WhiteLevel` field semantics, the P10 10-bit-to-12-bit-linear lookup table) cites it directly in that code's own doc comment, cross-checked in the LUT's case against the independent open-source [`pycine`](https://github.com/ottomatic-io/pycine) project's own byte-identical copy of the same table. Fields or behaviors this document doesn't cover (or that real files disagree with) are called out individually, in the same doc comments, as reverse-engineered/empirically-validated instead.
+
 ## Feedback and feature requests
 
 I'd love to hear from you! If there's a `.cine`/Phantom-camera-format feature you need that isn't here yet, or something doesn't behave the way you'd expect, please open an issue — I'm always happy to take a look and see what I can add.

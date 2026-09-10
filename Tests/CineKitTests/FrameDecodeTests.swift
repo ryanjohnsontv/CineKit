@@ -44,6 +44,15 @@ struct FrameDecodeTests {
     /// (confirmed via rendered preview PNGs — a correct point-source bloom
     /// and a correctly-oriented, recognizable scene), since no independent
     /// external oracle for pixel values exists for this proprietary format.
+    ///
+    /// Re-bootstrapped after adding `P10Linearization` to `P10Unpacker` (all
+    /// 4 real samples are P10-packed — see `SetupParsingTests`) — that fix
+    /// is a deliberate, documented, spec-mandated behavior change (P10's
+    /// packed codes are gamma-companded, not linear; see `P10Unpacker`'s own
+    /// doc comment), not a regression, so these baselines needed updating to
+    /// match, not the other way around. `expectedMin` moving from 0 to 2
+    /// specifically matches `P10Linearization.lut[0] == 2` exactly — the
+    /// darkest possible packed code no longer decodes to a literal zero.
     @Test func decodedPixelStatisticsBaselines() throws {
         struct Case {
             let file: String
@@ -54,9 +63,9 @@ struct FrameDecodeTests {
         }
 
         let cases: [Case] = [
-            Case(file: "Underexposed (240fps).cine", frameIndex: 0, expectedMin: 0, expectedMax: 296, expectedMean: 61.9207740162037),
-            Case(file: "Point Sourse Light + under Exposed (1000FPS).cine", frameIndex: 150, expectedMin: 0, expectedMax: 1012, expectedMean: 248.6197405478395),
-            Case(file: "Noise on Complex Image.cine", frameIndex: 100, expectedMin: 0, expectedMax: 1012, expectedMean: 447.8611930941358),
+            Case(file: "Underexposed (240fps).cine", frameIndex: 0, expectedMin: 2, expectedMax: 366, expectedMean: 62.428636188271604),
+            Case(file: "Point Sourse Light + under Exposed (1000FPS).cine", frameIndex: 150, expectedMin: 2, expectedMax: 4048, expectedMean: 662.7911983989197),
+            Case(file: "Noise on Complex Image.cine", frameIndex: 100, expectedMin: 2, expectedMax: 4048, expectedMean: 839.1766603973765),
         ]
 
         for c in cases {
@@ -78,6 +87,33 @@ struct FrameDecodeTests {
             #expect(minValue == c.expectedMin, "\(c.file) frame \(c.frameIndex) min")
             #expect(maxValue == c.expectedMax, "\(c.file) frame \(c.frameIndex) max")
             #expect(abs(mean - c.expectedMean) < 0.01, "\(c.file) frame \(c.frameIndex) mean")
+        }
+    }
+
+    /// All 4 real samples are P10-packed with `SETUP.BlackLevel == 64`/
+    /// `WhiteLevel == 1015` (see `SetupParsingTests
+    /// .blackAndWhiteLevelsAreConsistentAcrossSamples`) — those are the
+    /// pre-linearization packed-domain numbers. `CineFile
+    /// .effectiveBlackWhiteLevels` should report them re-expressed in the
+    /// same linear domain `decodeFrame(at:)`'s own pixel output is now in:
+    /// `P10Linearization.lut[64] == 64` (the documented black-point fixed
+    /// point) and `lut[1015] == 4095` (1015 sits one past the spec's own
+    /// documented white-point example of 1014, landing in the table's
+    /// saturating tail — not the "clean" 4064 the spec's own worked example
+    /// would suggest, which is exactly why this needs to look the real
+    /// value up rather than assume the documented example applies
+    /// verbatim). Deliberately different from `setup
+    /// .effectiveBlackWhiteLevels`, which must keep reporting the raw
+    /// packed-domain 64/1015 unchanged — see that property's own doc
+    /// comment.
+    @Test func effectiveBlackWhiteLevelsAreLinearizedForP10Samples() throws {
+        for name in TestFixtures.knownFiles {
+            let file = try CineFile(url: TestFixtures.url(name))
+            #expect(file.bitmapInfo.compression == .p10Packed, "\(name)")
+            let raw = file.setup.effectiveBlackWhiteLevels
+            #expect(raw == (64, 1015), "\(name)")
+            let linearized = file.effectiveBlackWhiteLevels
+            #expect(linearized == (64, 4095), "\(name)")
         }
     }
 

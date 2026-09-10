@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -10,10 +11,10 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Cache SwiftPM build state
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .build
           key: >-
@@ -22,6 +23,12 @@ jobs:
             }}
           restore-keys: |
             swiftpm-${{ runner.os }}-
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --config .swiftlint.yml Sources Tests
 
       - name: swift test
         run: swift test
