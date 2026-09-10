@@ -2,35 +2,26 @@ import Foundation
 
 /// Camera color calibration decomposed from `CineSetup.cmCalib`.
 ///
-/// The decomposition below is mathematically exact (verified against the
-/// bundled sample files' independently-stored `WBGain[0]` field, which
-/// agrees with `whiteBalanceR`/`B` derived here to 4+ decimal places) and
-/// self-consistent by construction — `whiteBalanceR/G/B` applied before
-/// demosaic, followed by `matrix` after, reconstructs `cmCalib @ raw`
-/// exactly (up to a harmless positive scale), for any invertible `cmCalib`.
-/// It is *not*, however, a guarantee that a given file's recorded
-/// `cmCalib`/`WBGain` actually describes a valid correction for that
-/// file's own content — some real Vision Research sample files carry
-/// calibration metadata left over from a different session that, applied
-/// here, provably pushes already-reasonably-neutral footage further from
-/// neutral rather than closer. Guarding against that requires actual frame
-/// pixels to check the result against, which this type deliberately has no
-/// access to — that check belongs in a consumer's own render pipeline, not
-/// here.
+/// Mathematically exact (verified against the bundled sample files'
+/// independently-stored `WBGain[0]`, matching to 4+ decimal places) and
+/// self-consistent: `whiteBalanceR/G/B` applied before demosaic, then
+/// `matrix` after, reconstructs `cmCalib @ raw` exactly (up to a harmless
+/// positive scale). It is *not* a guarantee that a file's recorded
+/// `cmCalib`/`WBGain` actually suits its own content — some real sample
+/// files carry calibration left over from a different session that
+/// provably pushes already-neutral footage further from neutral. Catching
+/// that needs real frame pixels, which this type has no access to; see
+/// `CalibrationPlausibility` for that check.
 ///
-/// Vision Research's own field documentation for `cmCalib` (copied into
-/// this project's SDK-header source comments) says the matrix "bring[s]
-/// camera pixels to rec 709. It includes the white balance... The cine
-/// player should decompose this matrix in two components: a diagonal one
-/// with the white balance to be applied before interpolation [demosaic]
+/// Vision Research's field documentation for `cmCalib` says the matrix
+/// "bring[s] camera pixels to rec 709. It includes the white balance... The
+/// cine player should decompose this matrix in two components: a diagonal
+/// one with the white balance to be applied before interpolation [demosaic]
 /// and a normalized one to be applied after interpolation." This type is
-/// exactly that decomposition, applied in that order by the render
-/// pipeline: `whiteBalanceR`/`G`/`B` scale each raw mosaic sample (by its
-/// CFA color role) *before* demosaicing, and `matrix` is applied to the
-/// resulting RGB triple *after*.
+/// exactly that decomposition.
 ///
-/// The decomposition algorithm is ported faithfully from the open-source
-/// `pycine` project's `color.py` `decompose_cmatrix` (numpy):
+/// Ported faithfully from the open-source `pycine` project's `color.py`
+/// `decompose_cmatrix` (numpy):
 /// ```python
 /// def decompose_cmatrix(calibration_matrix):
 ///     iwb = np.linalg.inv(calibration_matrix).dot(np.ones(3))
@@ -60,12 +51,10 @@ public struct ColorCalibration: Sendable, Equatable {
     /// demosaiced RGB triple after interpolation, before tone-mapping.
     public let matrix: [Float]
 
-    /// No-op calibration: unity white balance and an identity color
-    /// matrix. The correct fallback whenever `cmCalib` isn't present in a
-    /// file (older camera software, or one of the two untested VRI/
-    /// VRI-v6 camera families) or turns out to be degenerate — so the
-    /// render pipeline can apply "calibration" unconditionally without a
-    /// separate code path for the absent case.
+    /// No-op calibration (unity white balance, identity matrix) — the
+    /// fallback when `cmCalib` is absent (older firmware, untested VRI/
+    /// VRI-v6 families) or degenerate, so the render pipeline can apply
+    /// "calibration" unconditionally with no separate absent-case path.
     public static let identity = ColorCalibration(
         whiteBalanceR: 1, whiteBalanceG: 1, whiteBalanceB: 1,
         matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1]

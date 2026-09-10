@@ -1,24 +1,20 @@
 import Foundation
 
 /// The 1024-entry lookup table Vision Research's own Phantom Cine File
-/// Format specification provides (Appendix 1, "LUT for conversion from 10
-/// bits packed to the 12 bit linear") to reverse the P10 format's
-/// compander — see `P10Unpacker`'s own doc comment for why this exists and
-/// where it's applied. Spec source (public, no NDA/account required):
+/// Format spec provides (Appendix 1, "LUT for conversion from 10 bits
+/// packed to the 12 bit linear") to reverse the P10 format's compander —
+/// see `P10Unpacker`'s doc comment for why. Spec source (public, no
+/// NDA/account required):
 /// https://phantomhighspeed.my.site.com/PhantomCommunity/servlet/fileField?entityId=ka01N000000vtRkQAI&field=File_Attachments__Body__s
-/// Cross-checked against the independent open-source `pycine` project's own
-/// copy of this same table (`pycine/linLUT.py`): byte-for-byte identical,
-/// which is strong independent corroboration this is the correct, standard
-/// table rather than a transcription error.
+/// Cross-checked byte-for-byte identical against the independent
+/// open-source `pycine` project's own copy of this table (`pycine/linLUT.py`).
 ///
-/// `LinLUT[64] == 64` and `LinLUT[1014] == 4064` exactly match the spec's
-/// own stated fixed points ("Black level is at 64 and white level at 1014
-/// in the 10 bits packed representation. In the 12 bits representation the
+/// `LinLUT[64] == 64` and `LinLUT[1014] == 4064` match the spec's own
+/// stated fixed points ("Black level is at 64 and white level at 1014 in
+/// the 10 bits packed representation. In the 12 bits representation the
 /// levels are 64 and 4064.") — see `CineFile.effectiveBlackWhiteLevels`,
-/// which relies on exactly this to re-express a P10 file's own recorded
-/// `SETUP.BlackLevel`/`WhiteLevel` (themselves stored in the pre-
-/// linearization, packed domain) in the same linear domain this table's
-/// output lands in.
+/// which relies on this to re-express a P10 file's own recorded
+/// `SETUP.BlackLevel`/`WhiteLevel` in this table's linear output domain.
 enum P10Linearization {
     static let lut: [UInt16] = [
         2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 18,
@@ -87,12 +83,10 @@ enum P10Linearization {
         4014, 4022, 4031, 4039, 4048, 4056, 4064, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095,
     ]
 
-    /// `lut[code]`, clamping `code` into the table's valid `0...1023`
-    /// domain first — a defensive guard against a corrupt or adversarial
-    /// file's packed bit stream ever producing a code outside the 10-bit
-    /// range this table (and the format itself) is defined over, which
-    /// should be geometrically impossible from 4 legitimate 10-bit-packed
-    /// pixels but costs nothing to guard against.
+    /// `lut[code]`, clamping `code` into the table's `0...1023` domain
+    /// first — a defensive guard against a corrupt/adversarial bit stream
+    /// producing an out-of-range code, which should be impossible from
+    /// legitimate 10-bit-packed pixels but costs nothing to guard against.
     static func linearize(_ code: UInt16) -> UInt16 {
         lut[Int(min(code, 1023))]
     }

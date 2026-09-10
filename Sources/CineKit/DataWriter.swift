@@ -3,15 +3,11 @@ import Foundation
 /// Writes little-endian, fixed-width fields into a growing `Data` buffer —
 /// the write-side mirror of `DataReader`.
 ///
-/// `.cine` structs are declared with 1-byte packing and every multi-byte
-/// field on the wire is little-endian regardless of host endianness (see
-/// `DataReader`'s doc comment). `DataReader` makes that explicit on the read
-/// side via `UInt32(littleEndian: rawLoadedBits)`; this is the same
-/// convention run in reverse: `value.littleEndian` produces a same-typed
-/// value whose in-memory byte representation (as read by `withUnsafeBytes`)
-/// is the little-endian encoding, so appending those bytes is correct on
-/// any host byte order, not just the little-endian machines this actually
-/// runs on today.
+/// `.cine` structs use 1-byte packing and little-endian fields on the wire
+/// regardless of host endianness (see `DataReader`). `value.littleEndian`
+/// produces a same-typed value whose in-memory bytes (as read by
+/// `withUnsafeBytes`) are the little-endian encoding, so appending them is
+/// correct on any host byte order.
 struct DataWriter {
     private(set) var data = Data()
 

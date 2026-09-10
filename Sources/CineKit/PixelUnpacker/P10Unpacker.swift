@@ -1,34 +1,25 @@
 import Foundation
 
 /// `biCompression == 256`: Vision Research's "P10" 10-bit packed format —
-/// every 5 bytes encode 4 pixels. Bit layout and vertical-flip behavior were
-/// confirmed by visually validating decoded frames against real sample
-/// files (a point-source-light target produced a correct radially-symmetric
-/// bloom; a natural scene rendered right-side-up with readable text only
-/// when NOT flipped).
+/// every 5 bytes encode 4 pixels. Bit layout and vertical-flip behavior
+/// confirmed by visually validating decoded frames against real samples (a
+/// point-source light target produced a correct radially-symmetric bloom;
+/// a natural scene read right-side-up only when NOT flipped).
 ///
 /// P10 isn't a plain bit-truncation of the sensor's native 12-bit linear
-/// reading down to 10 bits — Vision Research's own format spec documents a
-/// "compander-expander scheme" applied first: a Rec.709-style gamma
-/// (gamma=2.2) curve compresses the 12-bit linear value into 10 bits
-/// (trading dynamic range for less quantization noise in the *stored*
-/// value, since a plain linear truncation would concentrate all its lost
-/// precision in the shadows), and "the inverse function should be applied
-/// at the linearization" — via the exact lookup table `P10Linearization`
-/// provides (the spec's own Appendix 1). Every value below is therefore run
-/// through that table immediately after unpacking, so this unpacker's
-/// output is always genuinely linear-referred (still in raw sensor units,
-/// just no longer gamma-companded), matching what `PixelUnpacker`'s own
-/// doc comment promises and what `P12LUnpacker`/`UncompressedUnpacker`
-/// already provide without needing this extra step (neither of those
-/// formats compands). Skipping this step (as an earlier version of this
-/// unpacker did) leaves every downstream linear operation — white balance,
-/// demosaic, color matrix — running on gamma-encoded rather than linear
-/// data, silently confusing two different domains as if they were one; see
-/// `CineFile.effectiveBlackWhiteLevels` for the other half of this fix
-/// (the file's own recorded `SETUP.BlackLevel`/`WhiteLevel` are themselves
-/// recorded in the pre-linearization packed domain and need the same
-/// table applied to land in the domain this unpacker's output is now in).
+/// reading — the spec documents a "compander-expander scheme": a
+/// Rec.709-style gamma (2.2) curve compresses 12-bit linear into 10 bits
+/// before storage (less shadow precision loss than plain truncation), and
+/// "the inverse function should be applied at the linearization" via the
+/// exact lookup table `P10Linearization` provides (spec Appendix 1). Every
+/// value below is run through that table immediately after unpacking, so
+/// output here is always genuinely linear-referred (`P12LUnpacker`/
+/// `UncompressedUnpacker` need no such step; neither format compands).
+/// Skipping it — as an earlier version did — leaves every downstream
+/// linear operation (white balance, demosaic, color matrix) silently
+/// running on gamma-encoded data; see `CineFile.effectiveBlackWhiteLevels`
+/// for the other half of that fix (recorded `SETUP.BlackLevel`/
+/// `WhiteLevel` need the same table to land in this domain).
 struct P10Unpacker: PixelUnpacker {
     var needsVerticalFlip: Bool { false }
 

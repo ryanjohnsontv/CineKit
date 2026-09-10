@@ -1,18 +1,16 @@
 import Foundation
 
-/// Byte offsets (relative to the start of the `SETUP` block, i.e. relative to
-/// `CineFileHeader.offSetup`) for every field in Vision Research's `SETUP`
-/// struct, current through software release 771 (Dec 2017). The struct is
-/// declared with 1-byte packing and has grown by simple append-only field
-/// additions across two decades of camera software — these offsets are the
-/// cumulative byte sum of every field declared before it, in original
-/// declaration order, and have been cross-checked against a known-good
-/// ctypes definition (matching offsets exactly, including a real-file
-/// "Mark" == "ST" sanity check — see CineSetupTests).
+/// Byte offsets (relative to `CineFileHeader.offSetup`) for every field in
+/// Vision Research's `SETUP` struct, current through software release 771
+/// (Dec 2017). 1-byte packed and append-only across two decades of camera
+/// software, so these are the cumulative byte sum of every field declared
+/// before it — cross-checked against a known-good ctypes definition
+/// (matching offsets exactly, including a real-file "Mark" == "ST" sanity
+/// check, see CineSetupTests).
 ///
-/// Only fields actually used by CineKit have named constants below; the
-/// rest of the struct's layout is implicitly encoded by leaving gaps, since
-/// no downstream field depends on anything but its own absolute offset.
+/// Only fields CineKit actually uses have named constants; the rest of the
+/// layout is implicit gaps, since no field here depends on anything but its
+/// own absolute offset.
 enum SetupFieldLayout {
     static let markOffset = 140
     static let markSize = 2
@@ -44,19 +42,13 @@ enum SetupFieldLayout {
     static let realBPPOffset = 896
     static let realBPPSize = 4
 
-    /// `WBGain` is an array of 4 `WBGAIN {R: float, B: float}` structs, one
-    /// per camera head — per Vision Research's own field documentation (as
-    /// transcribed in `pycine`'s struct comments): "index 0: all image for
-    /// v4,5,7... and TL head for v6, v6.2 (multihead); index 1, 2, 3: TR,
-    /// BL, BR for multihead." So on an ordinary single-head camera, only
-    /// index 0 is meaningful — indices 1-3 are still present on disk (once
-    /// `Length` reaches this far) but describe heads that don't exist.
-    /// This offset itself is cross-checked against `pycine`'s `tagSETUP`
-    /// ctypes definition (software release 792), whose `WBGain` field lands
-    /// at this same offset given every other offset above/below it in this
-    /// file — and directly against a real sample file's raw bytes, which
-    /// decode here to R=1.4338/B=1.7335 (matching a plausible, non-identity
-    /// white balance, not garbage).
+    /// `WBGain` is an array of 4 `WBGAIN {R, B}` structs, one per camera
+    /// head (per Vision Research's docs, transcribed in `pycine`): index 0
+    /// is the whole image on single-head cameras (or the TL head on
+    /// multihead v6/v6.2); 1-3 are TR/BL/BR, present but meaningless on a
+    /// single-head camera. Cross-checked against `pycine`'s `tagSETUP`
+    /// (release 792) and a real sample decoding to a plausible non-identity
+    /// R=1.4338/B=1.7335.
     static let wbGain0ROffset = 852
     static let wbGain0RSize = 4
 
@@ -81,22 +73,19 @@ enum SetupFieldLayout {
     static let wbGain3BOffset = 880
     static let wbGain3BSize = 4
 
-    /// Rotation to apply to the image, in degrees — 0 = do nothing, +90 =
-    /// counterclockwise, -90 = clockwise, per Vision Research's own field
-    /// documentation (as transcribed in `pycine`'s struct comments).
-    /// Immediately after the last `WBGain` entry (876 + 4 = 880... 880 + 4
-    /// = 884), cross-checked the same way as `wbGain0ROffset` above.
+    /// Rotation to apply to the image, in degrees — 0 = none, +90 =
+    /// counterclockwise, -90 = clockwise, per Vision Research's docs.
+    /// Immediately follows the last `WBGain` entry; cross-checked the same
+    /// way as `wbGain0ROffset`.
     static let rotateOffset = 884
     static let rotateSize = 4
 
     /// A second, separate `WBGAIN {R, B}` — "White balance to apply on
-    /// color interpolated Cines" per Vision Research's own field
-    /// documentation, i.e. meant for the post-demosaic pipeline stage,
-    /// distinct from `WBGain` above (which is pre-interpolation, per-head).
-    /// Immediately after `Rotate`, cross-checked the same way as
-    /// `wbGain0ROffset` above — and its own offset lands exactly where
-    /// `realBPPOffset` below (896) is reached next (888 + 8 = 896),
-    /// cross-validating this whole neighborhood's offset math.
+    /// color interpolated Cines" per Vision Research's docs, i.e. the
+    /// post-demosaic stage, distinct from `WBGain` above (pre-interpolation,
+    /// per-head). Immediately after `Rotate`; lands exactly where
+    /// `realBPPOffset` (896) is reached next, cross-validating this
+    /// neighborhood's offset math.
     static let wbViewROffset = 888
     static let wbViewRSize = 4
 
@@ -112,33 +101,25 @@ enum SetupFieldLayout {
     static let whiteLevelOffset = 5736
     static let whiteLevelSize = 4
 
-    /// Global display gamma, neutral at 1.0. Vision Research's own public
-    /// support documentation describes 2.2 as their software's *default*
-    /// display transform for these linear raw files — applied at
-    /// display/render time only, never baked into stored pixel data.
-    /// Cross-checked the same way as `wbGain0ROffset` above (pycine
-    /// `tagSETUP.fGamma` offset, and a real file decoding to a plausible
-    /// 2.2, not garbage).
+    /// Global display gamma, neutral at 1.0. Vision Research's support docs
+    /// describe 2.2 as their software's default display transform for these
+    /// linear raw files — applied at render time only, never baked into
+    /// stored pixels. Cross-checked against `pycine`'s offset and a real
+    /// file decoding to a plausible 2.2.
     static let fGammaOffset = 6024
     static let fGammaSize = 4
 
     /// Video *playback* (review) rate in frames per second, `SETUP.fPbRate`
-    /// per Vision Research's own "Cine File Format" specification (June
-    /// 2011), byte offset 6976 (0x1B40) relative to SETUP start — cross-
-    /// checked against two independent open-source .cine parsers (pycine,
-    /// pims), which agree on both the name and offset. A sibling field,
-    /// `fTcRate` (SMPTE timecode-generation rate), immediately follows at
-    /// offset 6980; it serves a narrower purpose and is intentionally not
-    /// exposed here.
+    /// per Vision Research's "Cine File Format" spec (June 2011), offset
+    /// 6976 (0x1B40) — cross-checked against two independent open-source
+    /// parsers (pycine, pims). A sibling field, `fTcRate` (SMPTE timecode
+    /// rate), follows at 6980 but isn't exposed here.
     ///
-    /// This is *not* the sensor's capture rate (see `frameRateOffset` /
-    /// `effectiveFrameRate`) -- it's the rate a camera's on-camera "video
-    /// system" review setting (e.g. VEO cameras' 1080p24/25/30 menu option)
-    /// writes into the file, describing how the footage should be played
-    /// back for review, independent of how fast it was actually captured.
-    /// Empirically confirmed against this project's own 4 real sample
-    /// files: every one reads exactly 24.0 here despite having very
-    /// different capture rates (1000/240/1536/1536fps).
+    /// Not the sensor's *capture* rate (see `frameRateOffset`) — it's the
+    /// camera's on-camera "video system" review setting (e.g. VEO's
+    /// 1080p24/25/30 menu), independent of capture speed. All 4 real sample
+    /// files read exactly 24.0 here despite capture rates of
+    /// 1000/240/1536/1536fps.
     static let pbRateOffset = 6976
     static let pbRateSize = 4
 
@@ -150,10 +131,9 @@ enum SetupFieldLayout {
 
     /// The RGB color calibration matrix (3x3, row-major, 9 floats) that
     /// "brings camera pixels to rec 709" per Vision Research's own field
-    /// documentation — it bundles the white balance and a normalized color
-    /// matrix together; `ColorCalibration.decompose(cmCalib:)` splits the
-    /// two back apart. Cross-checked the same way as `wbGain0ROffset`
-    /// above.
+    /// documentation — bundles white balance and a normalized color matrix
+    /// together; `ColorCalibration.decompose(cmCalib:)` splits them back
+    /// apart. Cross-checked the same way as `wbGain0ROffset` above.
     static let cmCalibOffset = 7252
     static let cmCalibSize = 36
 

@@ -1,15 +1,14 @@
 import Foundation
 
 /// Converts a frame's raw on-disk bytes into `width*height` raw sensor
-/// values (one `UInt16` per pixel, no demosaicing, no tone-mapping — those
+/// values (one `UInt16` per pixel, no demosaicing or tone-mapping — those
 /// happen later, in the rendering layer, so exposure/LUT adjustments never
 /// require re-decoding a frame).
 ///
-/// `Sendable`: every conformer (`P10Unpacker`, `P12LUnpacker`,
-/// `UncompressedUnpacker`) is a stateless or immutable-after-init struct, and
-/// `CineFile` needs its `unpacker` property to cross actor boundaries under
-/// Swift 6 strict concurrency (see `FileBackingStore`'s doc comment for the
-/// same reasoning applied there).
+/// `Sendable`: every conformer is a stateless or immutable-after-init
+/// struct, and `CineFile` needs its `unpacker` property to cross actor
+/// boundaries under Swift 6 strict concurrency (same reasoning as
+/// `FileBackingStore`).
 public protocol PixelUnpacker: Sendable {
     /// Whether rows are stored bottom-up on disk (like a Windows DIB) and
     /// need a vertical flip to display right-side-up. Confirmed empirically:

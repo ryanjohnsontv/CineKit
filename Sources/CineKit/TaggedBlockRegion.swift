@@ -3,34 +3,21 @@ import Foundation
 /// One tagged block from the region between the end of `SETUP` and the
 /// frame offset table (`CINEFILEHEADER.OffImageOffsets`).
 ///
-/// Confirmed present, via direct byte-level inspection independent of any
-/// parsed field, in every one of the 4 real sample files this package is
-/// tested against — immediately after `SETUP`, as exactly two back-to-back
-/// blocks: a `Type == 1002` array of one 8-byte `TIME64` record (fractions
-/// + seconds, same shape and field order as
-/// `CineFileHeader.triggerTimeFractions`/`triggerTimeSeconds` — confirmed
-/// by comparing the raw bytes of each file's own records against its own
-/// header's `TriggerTime`) per frame — the per-frame image capture time —
-/// followed by a `Type == 1003` array of one 4-byte value per frame — the
-/// per-frame exposure, in nanoseconds. In all 4 files both arrays' byte
-/// counts divide their file's `ImageCount` exactly (stride 8 and 4
-/// respectively, with zero remainder), the block boundaries sum exactly to
-/// the gap between `SETUP`'s end and `OffImageOffsets`, and the TIME64
-/// fractions field increases monotonically frame-over-frame while its
-/// seconds field only ever sits AT OR BEFORE the header's own `TriggerTime`
-/// (consistent with each of these 4 files being a pre-trigger buffer that
-/// ends at, not after, the trigger event) — by a gap that varies per file,
-/// from about 1 second up to about 13 seconds across these 4 samples, not
-/// a fixed or tight bound. All of this is consistent with a plain per-frame
-/// array indexed 0-based in the same frame order as
-/// `FrameOffsetTable`/`decodeFrame(at:)`.
+/// Confirmed via byte-level inspection in all 4 real sample files: two
+/// back-to-back blocks right after `SETUP` — `Type == 1002`, an 8-byte
+/// `TIME64` (fractions + seconds) per-frame capture time, then
+/// `Type == 1003`, a 4-byte per-frame exposure value in nanoseconds. In all
+/// 4 files both arrays' byte counts divide `ImageCount` exactly, block
+/// boundaries sum to the `SETUP`-to-`OffImageOffsets` gap, TIME64 fractions
+/// increase monotonically, and seconds stays at/before `TriggerTime`
+/// (consistent with a pre-trigger buffer ending at the trigger, by a gap of
+/// ~1-13s across samples) — all consistent with a plain per-frame array
+/// indexed 0-based like `FrameOffsetTable`/`decodeFrame(at:)`.
 ///
 /// `TaggedBlockRegion` below acts only on this struct's generic shape (a
-/// self-describing `Size`/`Type`/`Reserved` header plus payload, and —
-/// separately — whether a given block's payload happens to divide evenly
-/// into equal-size per-frame records), not on the two specific type codes
-/// documented above; any other per-frame-array tag block a future
-/// camera/SDK version adds would be trimmed the same way automatically.
+/// self-describing header plus payload that may or may not divide evenly
+/// into per-frame records), not on the two specific type codes above, so
+/// any future per-frame-array tag block trims the same way automatically.
 struct TaggedBlock {
     var type: UInt16
     var reserved: UInt16
@@ -44,19 +31,17 @@ struct TaggedBlock {
 /// `SETUP` and the frame offset table in a `.cine` file — see `TaggedBlock`
 /// for what's actually been confirmed to live there in real files.
 enum TaggedBlockRegion {
-    /// Parses `bytes` as a sequence of tagged blocks (`Size: UInt32` —
-    /// this block's total length, header included — followed by `Type:
-    /// UInt16`, `Reserved: UInt16`, then `Size - 8` bytes of payload), back
-    /// to back with no padding between.
+    /// Parses `bytes` as a sequence of tagged blocks (`Size: UInt32` — total
+    /// length, header included — followed by `Type: UInt16`, `Reserved:
+    /// UInt16`, then `Size - 8` bytes of payload), back to back with no
+    /// padding.
     ///
     /// Stops the moment a block's 8-byte header doesn't fully fit in what's
-    /// left, or a block declares a `Size` that would overrun the remaining
-    /// bytes — some layout this doesn't recognize — rather than guessing at
-    /// it. Everything from that point to the end of `bytes` is returned as
-    /// `trailing`, untouched, so a caller that only ever round-trips
-    /// `blocks` + `trailing` back through `serialize` never drops a byte it
-    /// didn't understand, even for a hypothetical file this parser gets
-    /// wrong.
+    /// left, or a `Size` would overrun the remaining bytes — rather than
+    /// guessing at an unrecognized layout. Everything from that point on is
+    /// returned as `trailing`, untouched, so round-tripping `blocks` +
+    /// `trailing` through `serialize` never drops a byte, even for a file
+    /// this parser gets wrong.
     static func parse(_ bytes: Data) -> (blocks: [TaggedBlock], trailing: Data) {
         let reader = DataReader(data: bytes)
         var blocks: [TaggedBlock] = []
@@ -88,23 +73,19 @@ enum TaggedBlockRegion {
         return writer.data
     }
 
-    /// Returns `bytes` (the raw tagged-block region from a source file with
+    /// Returns `bytes` (the tagged-block region from a source file with
     /// `sourceFrameCount` total frames) re-laid-out for a trim to `range`:
     /// every block whose payload divides evenly into `sourceFrameCount`
-    /// equal-size records — i.e. every block this file's real-sample
-    /// evidence says is a plain per-frame array, see `TaggedBlock`'s doc
-    /// comment — is sliced down to just the records for `range`, the same
-    /// selected-frames subset `CineFileWriter` copies pixel blocks for.
+    /// equal-size records (a plain per-frame array, see `TaggedBlock`) is
+    /// sliced down to just `range`'s records, the same subset
+    /// `CineFileWriter` copies pixel blocks for.
     ///
-    /// Any block whose payload *doesn't* divide evenly — not a shape this
-    /// function can attribute to frames at all — is passed through
-    /// unchanged, verbatim, rather than guessed at; likewise `trailing`
-    /// (bytes `parse` couldn't make sense of as blocks in the first place).
-    /// Both cases are a deliberate lossless fallback for a layout this
-    /// function doesn't recognize, not an expected outcome: every real
-    /// sample file this package is tested against parses as exactly two
-    /// evenly-dividing blocks and empty trailing bytes, so both fallbacks
-    /// are unexercised on real data today.
+    /// A block that doesn't divide evenly, or `trailing` bytes `parse`
+    /// couldn't attribute to blocks, pass through unchanged — a deliberate
+    /// lossless fallback for an unrecognized layout, not an expected
+    /// outcome: every real sample file tested parses as exactly two
+    /// evenly-dividing blocks with empty trailing bytes, so this path is
+    /// unexercised on real data today.
     static func trimmed(_ bytes: Data, sourceFrameCount: Int, to range: ClosedRange<Int>) -> Data {
         guard sourceFrameCount > 0, !bytes.isEmpty else { return bytes }
         let (blocks, trailing) = parse(bytes)

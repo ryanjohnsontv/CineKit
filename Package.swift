@@ -8,8 +8,15 @@ let package = Package(
         .library(name: "CineKit", targets: ["CineKit"])
     ],
     targets: [
+        .plugin(
+            name: "MetalShaderPlugin",
+            capability: .buildTool()
+        ),
         .target(
-            name: "CineKit"
+            name: "CineKit",
+            plugins: [
+                "MetalShaderPlugin",
+            ]
         ),
         .testTarget(name: "CineKitTests", dependencies: ["CineKit"]),
     ]

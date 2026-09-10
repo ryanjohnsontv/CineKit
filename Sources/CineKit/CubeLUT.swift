@@ -136,13 +136,11 @@ public struct CubeLUT {
     }
 
     /// Serializes this LUT back out to `.cube` text — the exact shape
-    /// `init(text:)` parses back: a `LUT_3D_SIZE N` directive followed by
-    /// `N*N*N` "R G B" data lines in `values`'s own flat order (red varies
-    /// fastest, then green, then blue). Always the standard `[0,1]` domain
-    /// (no `DOMAIN_MIN`/`DOMAIN_MAX` lines) — the only domain this type can
-    /// represent in the first place, since `init(text:)` rejects any other.
-    /// No `TITLE` line: this type never stores one from the file it was
-    /// parsed from, so there's nothing to round-trip here.
+    /// `init(text:)` parses back: `LUT_3D_SIZE N` followed by `N*N*N`
+    /// "R G B" lines in `values`'s own flat order (red fastest, then green,
+    /// then blue). Always the standard `[0,1]` domain (no
+    /// `DOMAIN_MIN`/`DOMAIN_MAX`), the only domain this type can represent.
+    /// No `TITLE` line — this type never stores one to round-trip.
     public var cubeText: String {
         var lines = ["LUT_3D_SIZE \(size)"]
         lines.reserveCapacity(1 + size * size * size)
